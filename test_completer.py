@@ -39,6 +39,9 @@ def test_notexisten():
 def test_bad_input():
     assert completer.get_completetions(ROOT.children, "bad_input") == []
 
+def test_to_raw_from_raw_not_raise():
+    assert ROOT == completer.from_raw(ROOT.to_raw())
+
 
 
 FILE_ATTRIBUTES = dict(type="FILE")
@@ -64,8 +67,4 @@ CLIENT = FakeClient(FAKECLIENT_DATA)
 
 def test_read_hdfs_tree_basic():
     tree = completer.read_hdfs_tree(CLIENT, "", 10)
-    assert completer.get_completetions(tree, "/v") == ["/var/"]
-    assert completer.get_completetions(tree, "/t_") == ["/t_file_in_root"]
-    assert set(completer.get_completetions(tree, "/t")) == set(["/tmp/", "/t_file_in_root"])
-    assert completer.get_completetions(tree, "/not_existen") == []
-    assert completer.get_completetions(tree, "bad_input") == []
+    assert ROOT.children == tree

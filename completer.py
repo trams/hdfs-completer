@@ -1,14 +1,22 @@
 #!/usr/bin/python
 
 import hdfs.util
+import tornado
 import tornado.web
-import logging
-
+from tornado.concurrent import run_on_executor
+from concurrent.futures import ThreadPoolExecutor
 from tornado.options import define, options, parse_command_line
+
+import logging
+import json
 
 LOG = logging.getLogger("completer")
 
 #############################################################
+
+class CancelReIndex(StandardError):
+    pass
+
 
 class GetCompletetionsHandler(tornado.web.RequestHandler):
     def __init__(self, application, request, state):
@@ -22,13 +30,54 @@ class GetCompletetionsHandler(tornado.web.RequestHandler):
 
 
 class ReIndexHandler(tornado.web.RequestHandler):
+    executor = ThreadPoolExecutor(max_workers=1)
+
+    def __init__(self, application, request, state):
+        super(ReIndexHandler, self).__init__(application, request)
+        self._state = state
+
+    @tornado.gen.coroutine
+    def get(self):
+        max_depth = int(self.get_argument("max_depth", 4))
+        self._state._root_node_future = self.reindex(max_depth)
+        self._state.root_node = yield self._state._root_node_future
+
+    @run_on_executor
+    def reindex(self, max_depth):
+        return self._state.reindex(max_depth)
+
+
+class CancelReIndexHandler(tornado.web.RequestHandler):
     def __init__(self, application, request, state):
         super(ReIndexHandler, self).__init__(application, request)
         self._state = state
 
     def get(self):
-        max_depth = int(self.get_argument("max_depth", 4))
-        self._state.index(max_depth)
+        if self._state._root_node_future is not None:
+            self._state._root_node_future.set_exception(CancelReIndex)
+            self._state._root_node_future = None
+        else:
+            self.set_status(500, reason="There is no reindex in progress. Nothing to cancel")
+
+
+class SaveHandler(tornado.web.RequestHandler):
+    def __init__(self, application, request, state):
+        super(SaveHandler, self).__init__(application, request)
+        self._state = state
+
+    def get(self):
+        filename = self.get_argument("filename")
+        self._state.save(filename)
+
+
+class LoadHandler(tornado.web.RequestHandler):
+    def __init__(self, application, request, state):
+        super(LoadHandler, self).__init__(application, request)
+        self._state = state
+
+    def get(self):
+        filename = self.get_argument("filename")
+        self._state.load(filename)
 
 
 class State(object):
@@ -36,10 +85,24 @@ class State(object):
         self.skip_list = skip_list
         self.root_node = None
         self.client = None
+        self._root_node_future = None
 
-    def index(self, max_depth=5):
-        self.root_node = read_hdfs_tree(self.client, '', max_depth, skip_list)
+    def save(self, filename):
+        with open(filename, "w") as f:
+            json.dump({name: value.to_raw() for name, value in self.root_node.iteritems()}, f)
 
+    def load(self, filename):
+        with open(filename) as f:
+            root = json.load(f)
+            for key in root:
+                root[key] = from_raw(root[key])
+            self.root_node = root
+
+    def reindex(self, max_depth=5):
+        return read_hdfs_tree(self.client, '', max_depth, self.skip_list)
+
+    def index(self, max_depth):
+        self.root_node = self.reindex(max_depth)
 
 #############################################################
 
@@ -48,6 +111,30 @@ class Node(object):
         self.name = name
         self.is_folder = is_folder
         self.children = children
+
+    def to_raw(self):
+        return dict(
+            name=self.name,
+            is_folder=self.is_folder,
+            children=[child.to_raw() for child in self.children.itervalues()])
+
+    def __eq__(self, other):
+        return self.name == other.name and self.is_folder == other.is_folder and self.children == other.children
+
+
+_KEYS=["name", "is_folder", "children"]
+def from_raw(raw):
+    for key in _KEYS:
+        if not key in raw:
+            raise ValueError("Expected the raw to contain the " + key);
+    return Node(
+        raw["name"],
+        raw["is_folder"],
+        to_indexed([from_raw(item) for item in raw["children"]]))
+
+def to_indexed(iterable):
+    return {item.name: item for item in iterable}
+
 
 
 def list_folder(client, path):
@@ -143,6 +230,9 @@ if __name__ == "__main__":
     application = tornado.web.Application([
         (r"/v1/completetions", GetCompletetionsHandler, dict(state=state)),
         (r"/v1/reindex", ReIndexHandler, dict(state=state)),
+        (r"/v1/cancelreindex", CancelReIndexHandler, dict(state=state)),
+        (r"/v1/save", SaveHandler, dict(state=state)),
+        (r"/v1/load", LoadHandler, dict(state=state))
     ])
     application.listen(options.port, address=options.local_host)
     tornado.ioloop.IOLoop.current().start()
