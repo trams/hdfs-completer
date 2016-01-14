@@ -38,9 +38,14 @@ class ReIndexHandler(tornado.web.RequestHandler):
 
     @tornado.gen.coroutine
     def get(self):
-        max_depth = int(self.get_argument("max_depth", 4))
-        self._state._root_node_future = self.reindex(max_depth)
-        self._state.root_node = yield self._state._root_node_future
+        try:
+            max_depth = int(self.get_argument("max_depth", 4))
+            self._state._root_node_future = self.reindex(max_depth)
+            self._state.root_node = yield self._state._root_node_future
+            self.finish()
+        except Exception:
+            LOG.error("Failed to reindex", exc_info=True)
+            raise
 
     @run_on_executor
     def reindex(self, max_depth):
