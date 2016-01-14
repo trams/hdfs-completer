@@ -7,6 +7,7 @@ from tornado.options import define, options, parse_command_line
 
 import logging
 import os.path
+import time
 
 LOG = logging.getLogger("completer")
 
@@ -27,15 +28,28 @@ class GetCompletetionsHandler(tornado.web.RequestHandler):
 class State(object):
     def __init__(self):
         self.client = None
+        self._cache = {}
 
     def get_completions(self, path):
         basename, filename = parse_path(path)
-        return get_completions(self.client, basename, filename)
+        entry = self._cache.get(basename)
+        if entry is None:
+            directory_list = self.fetch(basename)
+        else:
+            ts, directory_list = entry
+            if ts + 3600 < time.time():
+                directory_list = self.fetch(basename)
+        return [os.path.join(basename, name) + get_suffix(status) for name, status in directory_list if name.startswith(filename)]
+
+    def fetch(self, path):
+        LOG.info("There is no '%s' content in the cache. Fetch...", path)
+        directory_list = self.client.list(path, status=True)
+        self._cache[path] = (time.time(), directory_list)
+        return directory_list
+
+
 
 #############################################################
-
-def get_completions(client, path, prefix):
-    return [path + '/' + name + get_suffix(status) for name, status in client.list(path, status=True) if name.startswith(prefix)]
 
 def get_suffix(status):
     if status['type'] == 'DIRECTORY':
@@ -46,7 +60,10 @@ def get_suffix(status):
 def parse_path(not_complete_path):
     try:
         basename, filename = not_complete_path.rsplit('/', 1)
-        return (basename, filename)
+        if basename:
+            return (basename, filename)
+        else:
+            return ('/', filename)
     except ValueError:
         return ('/', '')
 
