@@ -92,15 +92,7 @@ def get_client(host, use_kerberos):
         return Client(host)
 
 
-define("port", default=8888, help="port to listen")
-define("hdfs_host", default="http://192.168.33.10:50070", help="hdfs host to index")
-define("local_host", default="127.0.0.1", help="host to bind")
-define("use_kerberos", default=False, help="use kerberos to authenticate")
-
-
-if __name__ == "__main__":
-    parse_command_line()
-
+def launch_server():
     state = State(get_client(options.hdfs_host, options.use_kerberos))
 
     application = tornado.web.Application([
@@ -109,3 +101,26 @@ if __name__ == "__main__":
     ])
     application.listen(options.port, address=options.local_host)
     tornado.ioloop.IOLoop.current().start()
+
+
+def list_folder():
+    import sys
+    state = State(get_client(options.hdfs_host, options.use_kerberos))
+    directory_list = state.get_list(options.list)
+    sys.stdout.write("\n".join(directory_list))
+
+
+define("port", default=8888, help="port to listen")
+define("hdfs_host", default="http://192.168.33.10:50070", help="hdfs host to index")
+define("local_host", default="127.0.0.1", help="host to bind")
+define("use_kerberos", default=False, help="use kerberos to authenticate")
+define("list", default=None, help="list the content of the FOLDER")
+
+
+if __name__ == "__main__":
+    parse_command_line()
+
+    if options.list:
+        list_folder()
+    else:
+        launch_server()
