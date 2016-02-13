@@ -24,28 +24,42 @@ class GetCompletetionsHandler(tornado.web.RequestHandler):
         self.write("\n".join(completions))
 
 
+class ListHandler(tornado.web.RequestHandler):
+    def __init__(self, application, request, state):
+        super(ListHandler, self).__init__(application, request)
+        self._state = state
+
+    def get(self):
+        path = self.get_argument("path")
+        directory_list = self._state.get_list(path)
+        self.write("\n".join(directory_list))
+
 
 class State(object):
-    def __init__(self):
-        self.client = None
+    def __init__(self, client):
+        self.client = client
         self._cache = {}
+
+    def get_list(self, path):
+        directory_content = self.fetch(path)
+        return [name + get_suffix(status) for name, status in directory_content]
 
     def get_completions(self, path):
         basename, filename = parse_path(path)
         entry = self._cache.get(basename)
         if entry is None:
-            directory_list = self.fetch(basename)
+            directory_content = self.fetch(basename)
         else:
-            ts, directory_list = entry
+            ts, directory_content = entry
             if ts + 3600 < time.time():
-                directory_list = self.fetch(basename)
-        return [os.path.join(basename, name) + get_suffix(status) for name, status in directory_list if name.startswith(filename)]
+                directory_content = self.fetch(basename)
+        return [os.path.join(basename, name) + get_suffix(status) for name, status in directory_content if name.startswith(filename)]
 
     def fetch(self, path):
         LOG.info("There is no '%s' content in the cache. Fetch...", path)
-        directory_list = self.client.list(path, status=True)
-        self._cache[path] = (time.time(), directory_list)
-        return directory_list
+        directory_content = self.client.list(path, status=True)
+        self._cache[path] = (time.time(), directory_content)
+        return directory_content
 
 
 
@@ -87,11 +101,11 @@ define("use_kerberos", default=False, help="use kerberos to authenticate")
 if __name__ == "__main__":
     parse_command_line()
 
-    state = State()
-    state.client = get_client(options.hdfs_host, options.use_kerberos)
+    state = State(get_client(options.hdfs_host, options.use_kerberos))
 
     application = tornado.web.Application([
         (r"/v1/completetions", GetCompletetionsHandler, dict(state=state)),
+        (r"/v1/list", ListHandler, dict(state=state)),
     ])
     application.listen(options.port, address=options.local_host)
     tornado.ioloop.IOLoop.current().start()
