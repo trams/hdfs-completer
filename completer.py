@@ -31,8 +31,11 @@ class ListHandler(tornado.web.RequestHandler):
 
     def get(self):
         path = self.get_argument("path")
-        directory_list = self._state.get_list(path)
-        self.write("\n".join(directory_list))
+        try:
+            directory_list = self._state.get_list(path)
+            self.write("\n".join(directory_list))
+        except hdfs.util.HdfsError as e:
+            self.write(str(e) + "\n")
 
 
 class State(object):
