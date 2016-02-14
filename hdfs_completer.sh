@@ -1,7 +1,6 @@
 
 
-HDFS_COMPLETER_HOST=${HDFS_COMPLETER_HOST-127.0.0.1}
-HDFS_COMPLETER_PORT=${HDFS_COMPLETER_PORT-8888}
+. $(dirname $0)/settings.sh
 
 _complete_hdfs_path() {
     cur="${COMP_WORDS[COMP_CWORD]}"
