@@ -1,6 +1,5 @@
 
-
-. $(dirname $0)/settings.sh
+. ./settings.sh
 
 _complete_hdfs_path() {
     cur="${COMP_WORDS[COMP_CWORD]}"
