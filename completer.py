@@ -10,6 +10,7 @@ from tornado import httpserver
 import logging
 import os.path
 import time
+import sys
 
 LOG = logging.getLogger("completer")
 
@@ -105,23 +106,29 @@ def launch_server():
         (r"/v1/list", ListHandler, dict(state=state)),
     ])
     if options.unix_socket:
-        socket = netutil.bind_unix_socket(options.unix_socket)
-        server = httpserver.HTTPServer(application)
-        server.add_socket(socket)
+        sockets = [netutil.bind_unix_socket(options.unix_socket)]
+    elif options.port_file:
+        sockets = netutil.bind_sockets(0, address=options.local_host)
+        port = sockets[0].getsockname()[1]
+        with open(options.port_file, "w+") as port_file:
+            port_file.write(str(port))
     else:
-        application.listen(options.port, address=options.local_host)
+        sys.stderr.write("Use either --unix_socket or --port_file\n")
+        return
+
+    server = httpserver.HTTPServer(application)
+    server.add_sockets(sockets)
     tornado.ioloop.IOLoop.current().start()
 
 
 def list_folder():
-    import sys
     state = State(get_client(options.hdfs_host, options.use_kerberos))
     directory_list = state.get_list(options.list)
     sys.stdout.write("\n".join(directory_list))
 
 
 define('unix_socket', group='webserver', default=None, help='Path to unix socket to bind')
-define("port", default=8888, help="port to listen")
+define('port_file', default=None, help='Path to a file with a port number to dump')
 define("hdfs_host", default="http://192.168.33.10:50070", help="hdfs host to index")
 define("local_host", default="127.0.0.1", help="host to bind")
 define("use_kerberos", default=False, help="use kerberos to authenticate")
