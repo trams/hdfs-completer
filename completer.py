@@ -4,6 +4,8 @@ import hdfs.util
 import tornado
 import tornado.web
 from tornado.options import define, options, parse_command_line
+from tornado import netutil
+from tornado import httpserver
 
 import logging
 import os.path
@@ -102,7 +104,12 @@ def launch_server():
         (r"/v1/completetions", GetCompletetionsHandler, dict(state=state)),
         (r"/v1/list", ListHandler, dict(state=state)),
     ])
-    application.listen(options.port, address=options.local_host)
+    if options.unix_socket:
+        socket = netutil.bind_unix_socket(options.unix_socket)
+        server = httpserver.HTTPServer(application)
+        server.add_socket(socket)
+    else:
+        application.listen(options.port, address=options.local_host)
     tornado.ioloop.IOLoop.current().start()
 
 
@@ -113,6 +120,7 @@ def list_folder():
     sys.stdout.write("\n".join(directory_list))
 
 
+define('unix_socket', group='webserver', default=None, help='Path to unix socket to bind')
 define("port", default=8888, help="port to listen")
 define("hdfs_host", default="http://192.168.33.10:50070", help="hdfs host to index")
 define("local_host", default="127.0.0.1", help="host to bind")
