@@ -3,9 +3,12 @@ _complete_hdfs_path_unix() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [[ ${COMP_CWORD} == 1 ]] ; then
-        possible_completetions=$(ls /tmp/hdfs_completer)
-        COMPREPLY=( $(compgen -W "${possible_completetions}" -- ${cur}) )
-        return 0
+        possible_completetions=$(ls /tmp/hdfs_completer 2>/dev/null)
+        if test $? -eq 0; then
+            COMPREPLY=( $(compgen -W "${possible_completetions}" -- ${cur}) )
+            return 0
+        fi
+        return 1
     fi
 
     local cluster="${COMP_WORDS[COMP_CWORD-1]}"
