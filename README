@@ -1,0 +1,41 @@
+Overview
+========
+Hdfs completer is a tool to help complete hdfs pathes
+Also it includes hdfsls which works like hdfs dfs -ls but much faster
+
+Requirements
+============
+
+Python 2.7
+Curl with support of unix sockets
+$ curl --help | grep unix
+to make sure curl supports unix sockets
+
+Installation on linux
+======================
+
+sudo apt-get install python-dev libkrb5-dev
+
+virtualenv ENV
+. ENV/bin/activate
+pip install -r requirements.txt
+
+# Create a symlink called hdfsls and make it available
+ln -s `pwd`/hdfs_list_unix.sh $HOME/bin/hdfsls
+# I added ($HOME/bin) to $PATH
+
+# Source hdfs_completer_unix.sh in your bashrc
+echo ". `pwd`/hdfs_completer_unix.sh" >> $HOME/.bashrc
+
+Configuration
+=============
+
+Hdfs completer uses $HOME/.hdfs_completer folder as a configuration database
+
+$HOME/.hdfs_completer/clusters contains a list of files
+each of them contains URL to WebHDFS
+
+For example, to add the cluster named aristotel add a file
+$HOME/.hdfs_completer/clusters/aristotel
+with a content
+http://WEB_HDFS_HOSTNAME:14000/
