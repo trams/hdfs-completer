@@ -2,7 +2,13 @@
 
 set -eu
 
-SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+SCRIPT_ROOT="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 readonly CLUSTER_NAME=$1
 readonly _PATH=$2
@@ -15,7 +21,7 @@ if ! test -S $SOCKET_PATH; then
     CLUSTER_URL=$(cat $HOME/.hdfs_completer/clusters/$CLUSTER_NAME)
     readonly LOG_PATH="/tmp/hdfs_completer/logs/$CLUSTER_NAME"
     mkdir -p /tmp/hdfs_completer/logs
-    $SCRIPT_ROOT/env/bin/python ./completer.py --hdfs_host=$CLUSTER_URL --logging=debug --use_kerberos --unix_socket=$SOCKET_PATH --log-file-prefix=$LOG_PATH &
+    $SCRIPT_ROOT/env/bin/python $SCRIPT_ROOT/completer.py --hdfs_host=$CLUSTER_URL --logging=debug --use_kerberos --unix_socket=$SOCKET_PATH --log-file-prefix=$LOG_PATH &
     sleep 3
 fi
 
